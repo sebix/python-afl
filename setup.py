@@ -32,9 +32,9 @@ import io
 import os
 import sys
 
-import distutils.core
-import distutils.version
-from distutils.command.sdist import sdist as distutils_sdist
+from setuptools import setup, find_packages
+from setuptools.extension import Extension
+from Cython.Build import cythonize
 
 try:
     import distutils644
@@ -62,6 +62,13 @@ Topic :: Software Development :: Quality Assurance
 Topic :: Software Development :: Testing
 '''.strip().splitlines()
 
+extensions = [
+    Extension(
+        "afl",
+        ["afl.pyx"]
+    ),
+]
+
 meta = dict(
     name='python-afl',
     version=get_version(),
@@ -72,53 +79,13 @@ meta = dict(
     url='http://jwilk.net/software/python-afl',
     author='Jakub Wilk',
     author_email='jwilk@jwilk.net',
+    install_requires=['Cython>=0.19'],
+    test_suite = 'nose.collector',
+    ext_modules = cythonize(extensions),
 )
 
-if 'setuptools' in sys.modules and sys.argv[1] == 'egg_info':
-    # We wouldn't normally want setuptools; but pip forces it upon us anyway,
-    # so let's abuse it to instruct pip to install Cython if it's missing.
-    distutils.core.setup(
-        install_requires=['Cython>=0.19'],
-        # Conceptually, “setup_requires” would make more sense than
-        # “install_requires”, but the former is not supported by pip:
-        # https://github.com/pypa/pip/issues/1820
-        **meta
-    )
-    sys.exit(0)
-
-try:
-    import Cython
-except ImportError:
-    raise RuntimeError('Cython >= 0.19 is required')
-
-try:
-    cython_version = Cython.__version__
-except AttributeError:
-    # Cython prior to 0.14 didn't have __version__.
-    # Oh well. We don't support such old versions anyway.
-    cython_version = '0'
-cython_version = distutils.version.LooseVersion(cython_version)
-if cython_version < '0.19':
-    raise RuntimeError('Cython >= 0.19 is required')
-
-import Cython.Build  # pylint: disable=wrong-import-position
-
-class cmd_sdist(distutils_sdist):
-
-    def maybe_move_file(self, base_dir, src, dst):
-        src = os.path.join(base_dir, src)
-        dst = os.path.join(base_dir, dst)
-        if os.path.exists(src):
-            self.move_file(src, dst)
-
-    def make_release_tree(self, base_dir, files):
-        distutils_sdist.make_release_tree(self, base_dir, files)
-        self.maybe_move_file(base_dir, 'LICENSE', 'doc/LICENSE')
-
-distutils.core.setup(
-    ext_modules=Cython.Build.cythonize('afl.pyx'),
+setup(
     scripts=glob.glob('py-afl-*'),
-    cmdclass=dict(sdist=cmd_sdist),
     **meta
 )
 
